@@ -1,0 +1,18 @@
+package transport
+
+import (
+	"github.com/beanbocchi/templar/internal/service"
+	"github.com/labstack/echo/v4"
+)
+
+type Handler struct {
+	svc *service.Service
+}
+
+func SetupRoute(e *echo.Echo, svc *service.Service) {
+	h := &Handler{svc: svc}
+	api := e.Group("/api/v1/")
+
+	api.POST("/push", h.Push)
+	api.POST("/pull", h.Pull)
+}
