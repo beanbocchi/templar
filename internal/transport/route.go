@@ -11,8 +11,11 @@ type Handler struct {
 
 func SetupRoute(e *echo.Echo, svc *service.Service) {
 	h := &Handler{svc: svc}
-	api := e.Group("/api/v1/")
+	api := e.Group("/api/v1")
 
 	api.POST("/push", h.Push)
 	api.POST("/pull", h.Pull)
+	api.GET("/templates", h.ListTemplate)
+	api.GET("/versions", h.ListVersions)
+	api.GET("/jobs", h.ListJobs)
 }

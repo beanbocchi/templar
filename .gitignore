@@ -30,3 +30,10 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+tmp/
+
+# env file
+.env
+config/config.*.yml
+!config/config.default.yml
