@@ -1,0 +1,120 @@
+{
+	"info": {
+		"_postman_id": "54f84e50-ea56-4785-a011-d04885bb80bb",
+		"name": "Templar",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "34158645",
+		"_collection_link": "https://lively-crater-239797.postman.co/workspace/internal~0c7bd6d0-efc1-4e81-b66c-e9843ccc346e/collection/34158645-54f84e50-ea56-4785-a011-d04885bb80bb?action=share&source=collection_link&creator=34158645"
+	},
+	"item": [
+		{
+			"name": "List Jobs",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}/api/v1/jobs",
+					"host": [
+						"{{baseURL}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"jobs"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "List templates",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}/api/v1/templates",
+					"host": [
+						"{{baseURL}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"templates"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "List versions",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}/api/v1/versions?template_id=1c74982f-56ff-4bf7-b435-169e7b349ced",
+					"host": [
+						"{{baseURL}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"versions"
+					],
+					"query": [
+						{
+							"key": "template_id",
+							"value": "1c74982f-56ff-4bf7-b435-169e7b349ced"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Push",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "template_id",
+							"value": "1c74982f-56ff-4bf7-b435-169e7b349ced",
+							"type": "text"
+						},
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/C:/Users/khoakomlem/Pictures/bg.png"
+						},
+						{
+							"key": "version",
+							"value": "1",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{baseURL}}/api/v1/push",
+					"host": [
+						"{{baseURL}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"push"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "baseURL",
+			"value": "",
+			"type": "default"
+		}
+	]
+}
