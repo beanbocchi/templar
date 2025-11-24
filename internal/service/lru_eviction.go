@@ -18,10 +18,6 @@ type lruEntry struct {
 
 // LRUEvictionPolicy is an in-memory LRU implementation that tracks cache usage
 // and total size, backed by template metadata stored in the database.
-//
-// NOTE: This currently only tracks usage and does not delete objects from the
-// underlying cache storage. It can be extended later to call Delete on a cache
-// client when items are evicted.
 type LRUEvictionPolicy struct {
 	mu sync.Mutex
 
