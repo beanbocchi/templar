@@ -1,8 +1,9 @@
 package transport
 
 import (
-	"github.com/beanbocchi/templar/internal/service"
 	"github.com/labstack/echo/v4"
+
+	"github.com/beanbocchi/templar/internal/service"
 )
 
 type Handler struct {

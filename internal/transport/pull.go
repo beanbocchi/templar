@@ -5,10 +5,11 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/beanbocchi/templar/internal/service"
-	"github.com/beanbocchi/templar/pkg/response"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+
+	"github.com/beanbocchi/templar/internal/service"
+	"github.com/beanbocchi/templar/pkg/response"
 )
 
 type PullRequest struct {

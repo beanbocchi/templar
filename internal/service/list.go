@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/guregu/null/v6"
+
 	"github.com/beanbocchi/templar/internal/db"
 	"github.com/beanbocchi/templar/internal/model"
-	"github.com/guregu/null/v6"
 )
 
 type ListTemplateParams struct {

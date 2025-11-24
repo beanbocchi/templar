@@ -1,10 +1,11 @@
 package transport
 
 import (
+	"github.com/labstack/echo/v4"
+
 	"github.com/beanbocchi/templar/internal/service"
 	"github.com/beanbocchi/templar/pkg/binder"
 	"github.com/beanbocchi/templar/pkg/validator"
-	"github.com/labstack/echo/v4"
 )
 
 // NewEcho creates a new Echo instance

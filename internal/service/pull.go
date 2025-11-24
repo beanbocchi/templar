@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/google/uuid"
+
 	"github.com/beanbocchi/templar/internal/db"
 	"github.com/beanbocchi/templar/internal/model"
-	"github.com/google/uuid"
 )
 
 type PullParams struct {

@@ -12,11 +12,12 @@ import (
 	"time"
 
 	"github.com/aws/smithy-go/ptr"
+	"github.com/google/uuid"
+	"github.com/zeebo/blake3"
+
 	"github.com/beanbocchi/templar/internal/db"
 	"github.com/beanbocchi/templar/internal/model"
 	"github.com/beanbocchi/templar/internal/utils/progress"
-	"github.com/google/uuid"
-	"github.com/zeebo/blake3"
 )
 
 type PushParams struct {

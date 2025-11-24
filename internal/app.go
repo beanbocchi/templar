@@ -7,17 +7,18 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/beanbocchi/templar/config"
-	"github.com/beanbocchi/templar/internal/service"
-	"github.com/beanbocchi/templar/internal/transport"
-	"github.com/beanbocchi/templar/pkg/binder"
-	"github.com/beanbocchi/templar/pkg/validator"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	_ "modernc.org/sqlite"
+
+	"github.com/beanbocchi/templar/config"
+	"github.com/beanbocchi/templar/internal/service"
+	"github.com/beanbocchi/templar/internal/transport"
+	"github.com/beanbocchi/templar/pkg/binder"
+	"github.com/beanbocchi/templar/pkg/validator"
 )
 
 // NewConfig provides the application configuration
