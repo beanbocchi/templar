@@ -28,6 +28,7 @@ CREATE TABLE "jobs" (
     "status" TEXT NOT NULL DEFAULT 'Pending',
     "progress" INTEGER NOT NULL DEFAULT 0,
     "started_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "completed_at" DATETIME,
     "error_message" TEXT,
     "metadata" TEXT NOT NULL,

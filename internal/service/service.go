@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/beanbocchi/templar/config"
 	"github.com/beanbocchi/templar/internal/client/objectstore"
 	"github.com/beanbocchi/templar/internal/client/objectstore/cache"
 	"github.com/beanbocchi/templar/internal/client/objectstore/local"
 	"github.com/beanbocchi/templar/internal/client/objectstore/stoj"
 	"github.com/beanbocchi/templar/pkg/sqlc"
-	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -64,7 +65,7 @@ func NewService(config *config.Config, sqliteDB *sql.DB) (*Service, error) {
 	return &Service{
 		objectStore: cacheStore,
 		storage:     storage,
-		jobs:        make(chan func(), config.App.JobBuffer),
+		jobs:        jobs,
 	}, nil
 }
 

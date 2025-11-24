@@ -272,7 +272,7 @@ func (q *Queries) ListAnalytics(ctx context.Context, arg ListAnalyticsParams) ([
 
 const listJobs = `-- name: ListJobs :many
 SELECT id, type, template_id, version_number, status, progress, started_at, completed_at, error_message, metadata FROM "jobs"
-ORDER BY "created_at" DESC
+ORDER BY "created_at" ASC
 LIMIT ?2
 OFFSET ?1
 `

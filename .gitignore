@@ -37,3 +37,7 @@ tmp/
 .env
 config/config.*.yml
 !config/config.default.yml
+
+cache/
+
+templar.db
