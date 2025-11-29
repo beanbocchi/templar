@@ -12,6 +12,7 @@ import (
 	"github.com/beanbocchi/templar/internal/client/objectstore/cache"
 	"github.com/beanbocchi/templar/internal/client/objectstore/local"
 	"github.com/beanbocchi/templar/internal/client/objectstore/stoj"
+	"github.com/beanbocchi/templar/internal/client/objectstore/sync"
 	"github.com/beanbocchi/templar/pkg/sqlc"
 )
 
@@ -33,6 +34,13 @@ func NewService(config *config.Config, sqliteDB *sql.DB) (*Service, error) {
 		return nil, fmt.Errorf("create local store: %w", err)
 	}
 
+	syncLocalStore, err := sync.NewSyncClient(sync.SyncConfig{
+		Client: localStore,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create sync local store: %w", err)
+	}
+
 	storjStore, err := stoj.NewClient(context.Background(), stoj.StorjConfig{
 		Bucket:      config.Objectstore.Storj.Bucket,
 		AccessGrant: config.Objectstore.Storj.AccessGrant,
@@ -42,16 +50,30 @@ func NewService(config *config.Config, sqliteDB *sql.DB) (*Service, error) {
 		return nil, fmt.Errorf("create storj store: %w", err)
 	}
 
+	syncStorjStore, err := sync.NewSyncClient(sync.SyncConfig{
+		Client: storjStore,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create sync storj store: %w", err)
+	}
+
 	// Create LRU eviction policy with max size from config (convert MB to bytes)
 	maxSizeBytes := config.Objectstore.Cache.MaxSize * 1024 * 1024
 
 	cacheStore, err := cache.NewCacheClient(cache.CacheConfig{
-		Cache:          localStore,
-		Primary:        storjStore,
+		Cache:          syncLocalStore,
+		Primary:        syncStorjStore,
 		EvictionPolicy: NewLRUEvictionPolicy(storage, maxSizeBytes),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create cache store: %w", err)
+	}
+
+	syncCacheStore, err := sync.NewSyncClient(sync.SyncConfig{
+		Client: cacheStore,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create sync cache store: %w", err)
 	}
 
 	// Create a job queue
@@ -63,7 +85,7 @@ func NewService(config *config.Config, sqliteDB *sql.DB) (*Service, error) {
 	}()
 
 	return &Service{
-		objectStore: cacheStore,
+		objectStore: syncCacheStore,
 		storage:     storage,
 		jobs:        jobs,
 	}, nil
