@@ -1,0 +1,28 @@
+env: dev
+
+log:
+  level: debug
+  format: json
+  addSource: true
+  timeFormat: "2006-01-02 15:04:05"
+
+app:
+  name: templar
+  jobBuffer: 10
+  jwt:
+    secret: supersecretkey123
+    accessTokenDuration: 1800
+    refreshSecret: superrefreshsecret456
+    refreshTokenDuration: 1209600
+
+objectstore:
+  presignedDefaultTTL: 1800 # in seconds
+  local:
+    root: "cache"
+    baseUrl: "http://localhost:8080"
+  storj:
+    bucket: "templar"
+    accessGrant: ""
+    baseUrl: "https://gateway.storjshare.io"
+  cache:
+    maxSize: 1024 # in MB

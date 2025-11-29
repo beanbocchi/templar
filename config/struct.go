@@ -49,6 +49,5 @@ type StorjObjectstore struct {
 }
 
 type CacheObjectstore struct {
-	MaxSize      int64  `yaml:"maxSize" mapstructure:"maxSize" validate:"required,gte=1"`
-	MetadataPath string `yaml:"metadataPath" mapstructure:"metadataPath" validate:"required"`
+	MaxSize int64 `yaml:"maxSize" mapstructure:"maxSize" validate:"required,gte=1"`
 }
