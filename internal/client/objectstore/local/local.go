@@ -7,11 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 type ClientImpl struct {
 	root    string
 	baseURL string
+	locks   sync.Map // map[string]*sync.RWMutex
 }
 
 type LocalConfig struct {
@@ -43,30 +45,44 @@ func (c *ClientImpl) Upload(ctx context.Context, key string, content io.Reader) 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
-	f, err := os.Create(path)
+
+	//! Write to temp file first, then rename for filesystem atomicity because mid-write crash will leave a partial file.
+	tmpPath := path + ".tmp"
+	f, err := os.Create(tmpPath)
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
-	defer f.Close()
+
 	if _, err := io.Copy(f, content); err != nil {
+		f.Close()
+		os.Remove(tmpPath)
 		return fmt.Errorf("write file: %w", err)
+	}
+
+	if err := f.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("close file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename file: %w", err)
 	}
 
 	return nil
 }
 
 func (c *ClientImpl) Download(ctx context.Context, key string) (io.ReadCloser, error) {
-	_ = ctx
 	path := c.fullPath(key)
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open file: %w", err)
 	}
+
 	return file, nil
 }
 
 func (c *ClientImpl) Delete(ctx context.Context, key string) error {
-	_ = ctx
 	path := c.fullPath(key)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove file: %w", err)
