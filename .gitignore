@@ -38,6 +38,6 @@ tmp/
 config/config.*.yml
 !config/config.default.yml
 
-cache/
+/cache/
 
 templar.db

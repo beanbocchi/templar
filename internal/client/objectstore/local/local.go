@@ -7,13 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 type ClientImpl struct {
 	root    string
 	baseURL string
-	locks   sync.Map // map[string]*sync.RWMutex
 }
 
 type LocalConfig struct {

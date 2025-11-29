@@ -17,7 +17,7 @@ import (
 
 	"github.com/beanbocchi/templar/internal/db"
 	"github.com/beanbocchi/templar/internal/model"
-	"github.com/beanbocchi/templar/internal/utils/progress"
+	"github.com/beanbocchi/templar/internal/utils/progressr"
 )
 
 type PushParams struct {
@@ -105,7 +105,7 @@ func (s *Service) Push(ctx context.Context, params PushParams) error {
 		// Compute hash while uploading using TeeReader
 		hasher := blake3.New()
 		hashReader := io.TeeReader(src, hasher)
-		progressReader := progress.NewReader(hashReader, params.File.Size)
+		progressReader := progressr.NewReader(hashReader, params.File.Size)
 
 		// Monitor progress
 		go func() {
