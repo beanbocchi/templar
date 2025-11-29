@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
+	"sync"
 
 	"github.com/beanbocchi/templar/internal/client/objectstore"
 )
@@ -54,24 +56,52 @@ func NewCacheClient(cfg CacheConfig) (*CacheClient, error) {
 	}, nil
 }
 
+func (c *CacheClient) cacheUpload(ctx context.Context, key string, content io.Reader) error {
+	if err := c.cache.Upload(ctx, key, content); err != nil {
+		return fmt.Errorf("upload to cache: %w", err)
+	}
+	keys := c.evictionPolicy.OnAdd(key)
+	for _, evictKey := range keys {
+		if err := c.cache.Delete(ctx, evictKey); err != nil {
+			slog.Warn("failed to evict", "key", evictKey, "error", err)
+		}
+	}
+	return nil
+}
+
 // Upload uploads to both cache and primary storage.
 func (c *CacheClient) Upload(ctx context.Context, key string, content io.Reader) error {
-	err := c.primary.Upload(ctx, key, content)
-	if err != nil {
+	// Create a pipe for the cache
+	pr, pw := io.Pipe()
+
+	// one stream goes to primary, one to the pipe
+	teeReader := io.TeeReader(content, pw)
+
+	var cacheErr error
+	var wg sync.WaitGroup
+
+	// Upload to cache in parallel
+	wg.Go(func() {
+		defer pr.Close()
+		if err := c.cacheUpload(ctx, key, pr); err != nil {
+			cacheErr = err
+		}
+	})
+
+	// Upload to primary (drives the teeReader)
+	if err := c.primary.Upload(ctx, key, teeReader); err != nil {
+		pw.CloseWithError(err)
+		wg.Wait()
 		return fmt.Errorf("upload to primary: %w", err)
 	}
+	if err := pw.Close(); err != nil {
+		wg.Wait()
+		return fmt.Errorf("close pipe writer: %w", err)
+	}
+	wg.Wait()
 
-	// Upload to cache
-	if err := c.cache.Upload(ctx, key, content); err != nil {
-		fmt.Printf("Warning: failed to cache %s: %v\n", key, err)
-	} else {
-		// Notify eviction policy that item was successfully added, it returns the keys that should be evicted.
-		keys := c.evictionPolicy.OnAdd(key)
-		for _, evictKey := range keys {
-			if err := c.cache.Delete(ctx, evictKey); err != nil {
-				fmt.Printf("Warning: failed to evict %s: %v\n", evictKey, err)
-			}
-		}
+	if cacheErr != nil {
+		slog.Warn("failed to cache", "key", key, "error", cacheErr)
 	}
 
 	return nil
@@ -79,32 +109,51 @@ func (c *CacheClient) Upload(ctx context.Context, key string, content io.Reader)
 
 // Get retrieves a file from cache first, then falls back to primary.
 func (c *CacheClient) Download(ctx context.Context, key string) (io.ReadCloser, error) {
-	reader, err := c.cache.Download(ctx, key)
+	cacheReader, err := c.cache.Download(ctx, key)
 	if err == nil {
 		// Found in cache - update access time for LRU
 		c.evictionPolicy.OnAccess(key)
-		return reader, nil
+		return cacheReader, nil
 	}
+
+	// teeReader(primaryReader) -> pipe -> cache
 
 	primaryReader, err := c.primary.Download(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("get from primary: %w", err)
 	}
 
-	// Cache the file in the background
+	pr, pw := io.Pipe()
+	teeReader := io.TeeReader(primaryReader, pw)
+
 	go func() {
-		if err := c.cache.Upload(context.Background(), key, primaryReader); err != nil {
-			fmt.Printf("Warning: failed to cache %s: %v\n", key, err)
+		if err := c.cacheUpload(ctx, key, pr); err != nil {
+			slog.Warn("failed to cache", "key", key, "error", err)
+			// No need to close the pipe writer here, it will be closed when the teePipeReadCloser is closed.
 		}
 	}()
 
-	return primaryReader, nil
+	// Return a reader that will close the pipe when closed (if we dont close it, the background upload will hang)
+	return &teePipeReadCloser{
+		Reader: teeReader,
+		pipeW:  pw,
+	}, nil
+}
+
+// teePipeReadCloser wraps a teeReader and closes the pipe when closed.
+type teePipeReadCloser struct {
+	io.Reader
+	pipeW *io.PipeWriter
+}
+
+func (c *teePipeReadCloser) Close() error {
+	return c.pipeW.Close()
 }
 
 // Delete deletes a file from both cache and primary storage.
 func (c *CacheClient) Delete(ctx context.Context, key string) error {
 	if err := c.cache.Delete(ctx, key); err != nil {
-		fmt.Printf("Warning: failed to delete from cache %s: %v\n", key, err)
+		slog.Warn("failed to delete from cache", "key", key, "error", err)
 	} else {
 		c.evictionPolicy.OnRemove(key)
 	}
