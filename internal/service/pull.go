@@ -32,10 +32,10 @@ func (s *Service) Pull(ctx context.Context, params PullParams) (io.ReadCloser, e
 		return nil, fmt.Errorf("get template version: %w", err)
 	}
 
-	reader, err := s.objectStore.Download(ctx, key)
+	file, err := s.objectStore.Download(ctx, key)
 	if err != nil {
 		return nil, model.NewError("object_store.get", "Failed to get object from object store: %w").Fmt(err)
 	}
 
-	return reader, nil
+	return file, nil
 }

@@ -63,7 +63,7 @@ func NewService(config *config.Config, sqliteDB *sql.DB) (*Service, error) {
 	cacheStore, err := cache.NewCacheClient(cache.CacheConfig{
 		Cache:          syncLocalStore,
 		Primary:        syncStorjStore,
-		EvictionPolicy: NewLRUEvictionPolicy(storage, maxSizeBytes),
+		EvictionPolicy: cache.NewLRUEvictionPolicy(maxSizeBytes),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create cache store: %w", err)

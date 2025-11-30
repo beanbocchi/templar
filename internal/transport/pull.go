@@ -27,20 +27,20 @@ func (h *Handler) Pull(c echo.Context) error {
 		return response.FromError(c.Response().Writer, http.StatusBadRequest, err)
 	}
 
-	reader, err := h.svc.Pull(c.Request().Context(), service.PullParams{
+	file, err := h.svc.Pull(c.Request().Context(), service.PullParams{
 		TemplateID: req.TemplateID,
 		Version:    req.Version,
 	})
 	if err != nil {
 		return response.FromError(c.Response().Writer, http.StatusInternalServerError, err)
 	}
-	defer reader.Close()
+	defer file.Close()
 
 	c.Response().Header().Set(echo.HeaderContentType, "application/octet-stream")
 	c.Response().Header().Set(echo.HeaderContentDisposition, fmt.Sprintf("attachment; filename=template_%s_%d", req.TemplateID.String(), req.Version))
 	c.Response().WriteHeader(http.StatusOK)
 
-	if _, err := io.Copy(c.Response().Writer, reader); err != nil {
+	if _, err := io.Copy(c.Response().Writer, file); err != nil {
 		return response.FromError(c.Response().Writer, http.StatusInternalServerError, err)
 	}
 

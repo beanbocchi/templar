@@ -117,7 +117,6 @@ func (s *Service) Push(ctx context.Context, params PushParams) error {
 					return
 				case <-ticker.C:
 					progress := progressReader.Progress()
-					fmt.Printf("Uploading template: %f\n", progress)
 					s.storage.UpdateJob(ctx, db.UpdateJobParams{
 						ID:       job.ID,
 						Status:   ptr.String("uploading"),
