@@ -8,16 +8,17 @@ import (
 	"sync"
 
 	"github.com/beanbocchi/templar/internal/client/objectstore"
+	"github.com/beanbocchi/templar/internal/utils/ioutil"
 )
 
 // EvictionPolicy defines the interface for cache eviction strategies.
 type EvictionPolicy interface {
-	// OnAccess is called when a cache key is accessed (read).
-	OnAccess(key string)
-	// OnAdd is called when a new item is successfully added to the cache, it returns the keys that should be evicted.
-	OnAdd(key string) []string
-	// OnRemove is called when an item is removed from the cache.
-	OnRemove(key string)
+	// Access updates the access time of a key in the LRU list.
+	Access(key string)
+	// Add adds a new item to the LRU list and returns the keys that should be evicted from the cache storage.
+	Add(key string, size int64) []string
+	// Remove removes an item from the LRU list and returns the keys that should be evicted from the cache storage.
+	Remove(key string)
 }
 
 // CacheConfig configures the cache storage.
@@ -57,10 +58,11 @@ func NewCacheClient(cfg CacheConfig) (*CacheClient, error) {
 }
 
 func (c *CacheClient) cacheUpload(ctx context.Context, key string, content io.Reader) error {
-	if err := c.cache.Upload(ctx, key, content); err != nil {
+	sizeReader := ioutil.NewSizeReader(content)
+	if err := c.cache.Upload(ctx, key, sizeReader); err != nil {
 		return fmt.Errorf("upload to cache: %w", err)
 	}
-	keys := c.evictionPolicy.OnAdd(key)
+	keys := c.evictionPolicy.Add(key, sizeReader.Size)
 	for _, evictKey := range keys {
 		if err := c.cache.Delete(ctx, evictKey); err != nil {
 			slog.Warn("failed to evict", "key", evictKey, "error", err)
@@ -112,7 +114,7 @@ func (c *CacheClient) Download(ctx context.Context, key string) (io.ReadCloser, 
 	cacheReader, err := c.cache.Download(ctx, key)
 	if err == nil {
 		// Found in cache - update access time for LRU
-		c.evictionPolicy.OnAccess(key)
+		c.evictionPolicy.Access(key)
 		return cacheReader, nil
 	}
 
@@ -155,7 +157,7 @@ func (c *CacheClient) Delete(ctx context.Context, key string) error {
 	if err := c.cache.Delete(ctx, key); err != nil {
 		slog.Warn("failed to delete from cache", "key", key, "error", err)
 	} else {
-		c.evictionPolicy.OnRemove(key)
+		c.evictionPolicy.Remove(key)
 	}
 
 	if err := c.primary.Delete(ctx, key); err != nil {

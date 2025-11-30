@@ -1,13 +1,8 @@
-package service
+package cache
 
 import (
 	"container/list"
-	"context"
 	"sync"
-
-	"github.com/beanbocchi/templar/internal/client/objectstore/cache"
-	"github.com/beanbocchi/templar/internal/db"
-	"github.com/beanbocchi/templar/pkg/sqlc"
 )
 
 // lruEntry holds metadata for a cached item.
@@ -28,24 +23,21 @@ type LRUEvictionPolicy struct {
 	items map[string]*list.Element
 	// order keeps items ordered by recency (front = most recently used).
 	order *list.List
-
-	storage *sqlc.Storage
 }
 
 // NewLRUEvictionPolicy creates a new LRU eviction policy implementation that
 // uses the provided storage to look up object metadata (e.g. file size) in the
 // database. maxSizeBytes is the soft limit for total cached size.
-func NewLRUEvictionPolicy(storage *sqlc.Storage, maxSizeBytes int64) cache.EvictionPolicy {
+func NewLRUEvictionPolicy(maxSizeBytes int64) EvictionPolicy {
 	return &LRUEvictionPolicy{
 		maxSizeBytes: maxSizeBytes,
 		items:        make(map[string]*list.Element),
 		order:        list.New(),
-		storage:      storage,
 	}
 }
 
-// OnAccess is called when a cache key is accessed (read).
-func (p *LRUEvictionPolicy) OnAccess(key string) {
+// Access updates the access time of a key in the LRU list.
+func (p *LRUEvictionPolicy) Access(key string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -54,9 +46,8 @@ func (p *LRUEvictionPolicy) OnAccess(key string) {
 	}
 }
 
-// OnAdd is called when a new item is successfully added to the cache.
-// It returns the keys that should be evicted from the cache storage.
-func (p *LRUEvictionPolicy) OnAdd(key string) []string {
+// Add adds a new item to the LRU list and returns the keys that should be evicted from the cache storage.
+func (p *LRUEvictionPolicy) Add(key string, size int64) []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -65,8 +56,6 @@ func (p *LRUEvictionPolicy) OnAdd(key string) []string {
 		p.order.MoveToFront(elem)
 		return nil
 	}
-
-	size := p.lookupSizeBytes(key)
 
 	entry := &lruEntry{
 		key:  key,
@@ -79,8 +68,8 @@ func (p *LRUEvictionPolicy) OnAdd(key string) []string {
 	return p.evictIfNeeded()
 }
 
-// OnRemove is called when an item is removed from the cache.
-func (p *LRUEvictionPolicy) OnRemove(key string) {
+// Remove removes an item from the LRU list and returns the keys that should be evicted from the cache storage.
+func (p *LRUEvictionPolicy) Remove(key string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -127,23 +116,4 @@ func (p *LRUEvictionPolicy) evictIfNeeded() []string {
 	}
 
 	return evicted
-}
-
-// lookupSizeBytes attempts to look up the file size for the given cache key
-// using the template metadata stored in the database.
-// If any step fails, this returns 0 and the item is still tracked but will not
-// contribute towards the size limit.
-func (p *LRUEvictionPolicy) lookupSizeBytes(key string) int64 {
-	if p.storage == nil || p.storage.Queries == nil {
-		return 0
-	}
-
-	tv, err := p.storage.Queries.GetTemplateVersion(context.Background(), db.GetTemplateVersionParams{
-		ObjectKey: key,
-	})
-	if err != nil || tv.FileSize == nil {
-		return 0
-	}
-
-	return *tv.FileSize
 }
