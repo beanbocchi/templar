@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/beanbocchi/templar/internal/client/objectstore"
-	"github.com/beanbocchi/templar/internal/utils/locker"
+	"github.com/beanbocchi/templar/internal/utils/ioutil"
 )
 
 // SyncConfig configures the synchronized objectstore wrapper.
@@ -53,13 +53,13 @@ func (c *SyncClient) Download(ctx context.Context, key string) (io.ReadCloser, e
 	lock := c.getLock(key)
 	lock.RLock()
 
-	reader, err := c.client.Download(ctx, key)
+	file, err := c.client.Download(ctx, key)
 	if err != nil {
 		lock.RUnlock()
 		return nil, fmt.Errorf("download: %w", err)
 	}
 
-	return locker.NewReadCloser(reader, lock), nil
+	return ioutil.NewLockedReadCloser(file, lock), nil
 }
 
 // Delete deletes an object with write locking.
