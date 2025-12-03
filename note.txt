@@ -1,0 +1,4 @@
+- ưu tiên cache trước cold storage
+- verify file
+- cache xong thì loại bỏ mấy 
+- hash file
