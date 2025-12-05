@@ -39,6 +39,52 @@ func (c *SyncClient) getLock(key string) *sync.RWMutex {
 	return lock.(*sync.RWMutex)
 }
 
+// CreateMultipart starts a multipart upload with write locking.
+func (c *SyncClient) CreateMultipart(ctx context.Context, key string) (string, error) {
+	lock := c.getLock(key)
+	lock.Lock()
+	defer lock.Unlock()
+
+	return c.client.CreateMultipart(ctx, key)
+}
+
+// UploadPart uploads a single part with write locking.
+func (c *SyncClient) UploadPart(
+	ctx context.Context,
+	key string,
+	uploadID string,
+	partNumber int,
+	content io.Reader,
+) error {
+	lock := c.getLock(key)
+	lock.Lock()
+	defer lock.Unlock()
+
+	return c.client.UploadPart(ctx, key, uploadID, partNumber, content)
+}
+
+// CompleteMultipart finalizes a multipart upload with write locking.
+func (c *SyncClient) CompleteMultipart(
+	ctx context.Context,
+	key string,
+	uploadID string,
+) error {
+	lock := c.getLock(key)
+	lock.Lock()
+	defer lock.Unlock()
+
+	return c.client.CompleteMultipart(ctx, key, uploadID)
+}
+
+// AbortMultipart cancels a multipart upload with write locking.
+func (c *SyncClient) AbortMultipart(ctx context.Context, key, uploadID string) error {
+	lock := c.getLock(key)
+	lock.Lock()
+	defer lock.Unlock()
+
+	return c.client.AbortMultipart(ctx, key, uploadID)
+}
+
 // Upload uploads an object with write locking.
 func (c *SyncClient) Upload(ctx context.Context, key string, content io.Reader) error {
 	lock := c.getLock(key)

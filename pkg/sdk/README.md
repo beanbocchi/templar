@@ -43,19 +43,17 @@ func main() {
     fmt.Println("Upload successful:", pushResp.Message)
     
     // Pull - Download template
-    fileReader, err := client.Pull(sdk.PullRequest{
-        TemplateID: templateID,
-        Version:    1,
-    })
-    if err != nil {
-        panic(err)
-    }
-    defer fileReader.Close()
-    
-    // Save file
+    // Stream download and verify with BLAKE3 (if you know the expected hash)
     output, _ := os.Create("downloaded_template.txt")
     defer output.Close()
-    io.Copy(output, fileReader)
+    
+    expectedHash := "" // optionally set to the known hash (BLAKE3 hex)
+    if err := client.PullToWriter(sdk.PullRequest{
+        TemplateID: templateID,
+        Version:    1,
+    }, output, expectedHash); err != nil {
+        panic(err)
+    }
     
     // ListTemplates - List all templates
     templates, err := client.ListTemplates(&sdk.ListTemplatesRequest{
@@ -99,9 +97,9 @@ func int32Ptr(i int32) *int32 {
 
 Creates a new SDK client.
 
-- `baseURL`: The base URL of the API, e.g., "http://localhost:8080/api/v1"
+- `baseURL`: The base URL of the API, e.g., "<http://localhost:8080/api/v1>"
 
-#### NewClientWithHTTPClient(baseURL string, httpClient *http.Client) *Client
+#### NewClientWithHTTPClient(baseURL string, httpClient *http.Client)*Client
 
 Creates an SDK client with a custom HTTP client.
 
@@ -114,12 +112,14 @@ func (c *Client) Push(req PushRequest) (*PushResponse, error)
 ```
 
 **Parameters:**
+
 - `TemplateID`: Template ID (uuid.UUID)
 - `Version`: Version number (int64, must be >= 1)
 - `File`: File content (io.Reader)
 - `FileName`: File name (string, optional)
 
 **Returns:**
+
 - `*PushResponse`: Response containing success message
 - `error`: Error information
 
@@ -132,10 +132,12 @@ func (c *Client) Pull(req PullRequest) (io.ReadCloser, error)
 ```
 
 **Parameters:**
+
 - `TemplateID`: Template ID (uuid.UUID)
 - `Version`: Version number (int64, must be >= 1)
 
 **Returns:**
+
 - `io.ReadCloser`: Reader for file content, caller is responsible for closing
 - `error`: Error information
 
@@ -148,9 +150,11 @@ func (c *Client) ListTemplates(req *ListTemplatesRequest) ([]Template, error)
 ```
 
 **Parameters:**
+
 - `Search`: Optional search keyword (string)
 
 **Returns:**
+
 - `[]Template`: List of templates
 - `error`: Error information
 
@@ -163,9 +167,11 @@ func (c *Client) ListVersions(req ListVersionsRequest) ([]TemplateVersion, error
 ```
 
 **Parameters:**
+
 - `TemplateID`: Template ID (uuid.UUID)
 
 **Returns:**
+
 - `[]TemplateVersion`: List of versions
 - `error`: Error information
 
@@ -178,11 +184,13 @@ func (c *Client) ListJobs(req *ListJobsRequest) ([]Job, error)
 ```
 
 **Parameters:**
+
 - `Page`: Page number, starts from 1 (*int32, optional)
 - `Limit`: Number of items per page, max 100 (*int32, optional)
 - `Cursor`: Cursor for cursor-based pagination (*string, optional)
 
 **Returns:**
+
 - `[]Job`: List of jobs
 - `error`: Error information
 

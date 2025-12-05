@@ -39,6 +39,23 @@ func (s *Service) ListVersions(ctx context.Context, params ListVersionsParams) (
 	return versions, nil
 }
 
+type GetTemplateVersionParams struct {
+	TemplateID string `validate:"required,uuid"`
+	Version    int64  `validate:"required,min=1"`
+}
+
+func (s *Service) GetTemplateVersion(ctx context.Context, params GetTemplateVersionParams) (db.TemplateVersion, error) {
+	version, err := s.storage.GetTemplateVersion(ctx, db.GetTemplateVersionParams{
+		TemplateID:    params.TemplateID,
+		VersionNumber: params.Version,
+	})
+	if err != nil {
+		return db.TemplateVersion{}, fmt.Errorf("get template version: %w", err)
+	}
+
+	return version, nil
+}
+
 type ListJobsParams struct {
 	model.PaginationParams
 }

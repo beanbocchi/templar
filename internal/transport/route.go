@@ -18,5 +18,6 @@ func SetupRoute(e *echo.Echo, svc *service.Service) {
 	api.POST("/pull", h.Pull)
 	api.GET("/templates", h.ListTemplate)
 	api.GET("/versions", h.ListVersions)
+	api.GET("/versions/:template_id/:version", h.GetTemplateVersion)
 	api.GET("/jobs", h.ListJobs)
 }

@@ -1,4 +1,2 @@
 - ưu tiên cache trước cold storage
-- verify file
-- cache xong thì loại bỏ mấy 
-- hash file
+- verify file (blake3) — SDK stream uploads/downloads + blake3 verify

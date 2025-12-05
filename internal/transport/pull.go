@@ -41,7 +41,10 @@ func (h *Handler) Pull(c echo.Context) error {
 	c.Response().WriteHeader(http.StatusOK)
 
 	if _, err := io.Copy(c.Response().Writer, file); err != nil {
-		return response.FromError(c.Response().Writer, http.StatusInternalServerError, err)
+		// Cannot send error response after headers are already sent (WriteHeader was called)
+		// Just log the error - the client will see an incomplete download
+		c.Logger().Errorf("failed to stream file: %v", err)
+		return nil
 	}
 
 	return nil

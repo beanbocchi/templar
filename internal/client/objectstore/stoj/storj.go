@@ -54,18 +54,79 @@ func NewClient(ctx context.Context, cfg StorjConfig) (*ClientImpl, error) {
 		return nil, fmt.Errorf("ensure bucket: %w", err)
 	}
 
-	return &ClientImpl{
+	client := &ClientImpl{
 		project:     project,
 		bucket:      cfg.Bucket,
 		baseURL:     strings.TrimRight(cfg.BaseURL, "/"),
 		accessGrant: cfg.AccessGrant,
-	}, nil
+	}
+
+	return client, nil
 }
 
 // Close closes the Storj project connection
 func (c *ClientImpl) Close() error {
 	if c.project != nil {
 		return c.project.Close()
+	}
+	return nil
+}
+
+// CreateMultipart starts a Storj multipart upload using BeginUpload and
+// returns the uploadID Storj generates.
+func (c *ClientImpl) CreateMultipart(ctx context.Context, key string) (string, error) {
+	info, err := c.project.BeginUpload(ctx, c.bucket, key, nil)
+	if err != nil {
+		return "", fmt.Errorf("begin upload: %w", err)
+	}
+
+	return info.UploadID, nil
+}
+
+// UploadPart uploads a single part to Storj using the native multipart API.
+func (c *ClientImpl) UploadPart(
+	ctx context.Context,
+	key string,
+	uploadID string,
+	partNumber int,
+	content io.Reader,
+) error {
+	pu, err := c.project.UploadPart(ctx, c.bucket, key, uploadID, uint32(partNumber))
+	if err != nil {
+		return fmt.Errorf("begin part upload: %w", err)
+	}
+
+	// Stream data into the part.
+	if _, err := io.Copy(pu, content); err != nil {
+		_ = pu.Abort()
+		return fmt.Errorf("write part: %w", err)
+	}
+
+	// Commit the part. Storj will record size/metadata internally.
+	if err := pu.Commit(); err != nil {
+		return fmt.Errorf("commit part: %w", err)
+	}
+
+	return nil
+}
+
+// CompleteMultipart finalizes the multipart upload in Storj.
+func (c *ClientImpl) CompleteMultipart(
+	ctx context.Context,
+	key string,
+	uploadID string,
+) error {
+	if _, err := c.project.CommitUpload(ctx, c.bucket, key, uploadID, nil); err != nil {
+		return fmt.Errorf("commit upload: %w", err)
+	}
+
+	return nil
+}
+
+// AbortMultipart cancels the multipart upload in Storj.
+func (c *ClientImpl) AbortMultipart(ctx context.Context, key, uploadID string) error {
+	if err := c.project.AbortUpload(ctx, c.bucket, key, uploadID); err != nil {
+		return fmt.Errorf("abort upload: %w", err)
 	}
 	return nil
 }

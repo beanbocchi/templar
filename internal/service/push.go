@@ -27,16 +27,23 @@ type PushParams struct {
 }
 
 func (s *Service) Push(ctx context.Context, params PushParams) error {
-	tx, err := s.storage.BeginTx()
+	// Create a job to push the template - OUTSIDE transaction to be visible immediately
+	job, err := s.storage.CreateJob(ctx, db.CreateJobParams{
+		Type:          "template.push",
+		TemplateID:    params.TemplateID.String(),
+		VersionNumber: ptr.Int64(params.Version),
+		Status:        "pending",
+		Progress:      0,
+		StartedAt:     time.Now(),
+	})
 	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
+		return fmt.Errorf("create job: %w", err)
 	}
-	defer tx.Rollback()
 
 	// Check if the template exists, if not create it
-	if _, err := tx.GetTemplate(ctx, params.TemplateID.String()); err != nil {
+	if _, err := s.storage.GetTemplate(ctx, params.TemplateID.String()); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			if _, err := tx.CreateTemplate(ctx, db.CreateTemplateParams{
+			if _, err := s.storage.CreateTemplate(ctx, db.CreateTemplateParams{
 				ID:   params.TemplateID.String(),
 				Name: params.TemplateID.String(),
 				// Description: sql.NullString{String: params.TemplateID.String(), Valid: true},
@@ -49,7 +56,7 @@ func (s *Service) Push(ctx context.Context, params PushParams) error {
 	}
 
 	// Check if the template version already exists
-	if _, err := tx.GetTemplateVersion(ctx, db.GetTemplateVersionParams{
+	if _, err := s.storage.GetTemplateVersion(ctx, db.GetTemplateVersionParams{
 		TemplateID:    params.TemplateID.String(),
 		VersionNumber: params.Version,
 	}); err != nil {
@@ -61,113 +68,85 @@ func (s *Service) Push(ctx context.Context, params PushParams) error {
 		return model.NewError("template_version.already_exists", "Template %s version %d already exists").Fmt(params.TemplateID.String(), params.Version)
 	}
 
-	metadata, err := json.Marshal(params)
+	fmt.Printf("Pushing template: %s\n", params.TemplateID.String())
+	key := getKey(params.TemplateID, params.Version)
+
+	src, err := params.File.Open()
 	if err != nil {
-		return fmt.Errorf("marshal metadata: %w", err)
+		s.storage.UpdateJob(ctx, db.UpdateJobParams{
+			ID:           job.ID,
+			Status:       ptr.String("error"),
+			ErrorMessage: ptr.String(err.Error()),
+			CompletedAt:  ptr.Time(time.Now()),
+		})
+		return fmt.Errorf("open file: %w", err)
 	}
+	defer src.Close()
 
-	// Create a job to push the template
-	job, err := tx.CreateJob(ctx, db.CreateJobParams{
-		Type:          "template.push",
-		TemplateID:    params.TemplateID.String(),
-		VersionNumber: ptr.Int64(params.Version),
-		Status:        "pending",
-		Progress:      0,
-		StartedAt:     time.Now(),
-		Metadata:      string(metadata),
-	})
-	if err != nil {
-		return fmt.Errorf("create job: %w", err)
-	}
+	// Compute hash while uploading using TeeReader
+	hasher := blake3.New()
+	hashReader := io.TeeReader(src, hasher)
+	progressReader := progressr.NewReader(hashReader, params.File.Size)
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
-	}
-
-	// Background upload the file to the object store
-	jobFn := func() {
-		fmt.Printf("Pushing template: %s\n", params.TemplateID.String())
-		ctx := context.Background()
-		key := getKey(params.TemplateID, params.Version)
-
-		src, err := params.File.Open()
-		if err != nil {
-			s.storage.UpdateJob(ctx, db.UpdateJobParams{
-				ID:           job.ID,
-				Status:       ptr.String("error"),
-				ErrorMessage: ptr.String(err.Error()),
-				CompletedAt:  ptr.Time(time.Now()),
-			})
-			return
-		}
-		defer src.Close()
-
-		// Compute hash while uploading using TeeReader
-		hasher := blake3.New()
-		hashReader := io.TeeReader(src, hasher)
-		progressReader := progressr.NewReader(hashReader, params.File.Size)
-
-		// Monitor progress
-		go func() {
-			ticker := time.NewTicker(1 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
+	// Monitor progress
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				progress := progressReader.Progress()
+				s.storage.UpdateJob(ctx, db.UpdateJobParams{
+					ID:       job.ID,
+					Status:   ptr.String("uploading"),
+					Progress: ptr.Int64(int64(progress * 100)),
+				})
+				if progress >= 1.0 {
 					return
-				case <-ticker.C:
-					progress := progressReader.Progress()
-					s.storage.UpdateJob(ctx, db.UpdateJobParams{
-						ID:       job.ID,
-						Status:   ptr.String("uploading"),
-						Progress: ptr.Int64(int64(progress * 100)),
-					})
-					if progress >= 1.0 {
-						return
-					}
 				}
 			}
-		}()
-
-		// Upload file
-		if err := s.objectStore.Upload(ctx, key, progressReader); err != nil {
-			s.storage.UpdateJob(ctx, db.UpdateJobParams{
-				ID:           job.ID,
-				Status:       ptr.String("error"),
-				ErrorMessage: ptr.String(err.Error()),
-				CompletedAt:  ptr.Time(time.Now()),
-			})
-			return
 		}
+	}()
 
-		// Create template version with computed hash
-		hashStr := hex.EncodeToString(hasher.Sum(nil))
-		if _, err := s.storage.CreateTemplateVersion(ctx, db.CreateTemplateVersionParams{
-			ID:            uuid.New().String(),
-			TemplateID:    params.TemplateID.String(),
-			VersionNumber: params.Version,
-			ObjectKey:     key,
-			FileSize:      ptr.Int64(params.File.Size),
-			FileHash:      ptr.String(hashStr),
-		}); err != nil {
-			s.storage.UpdateJob(ctx, db.UpdateJobParams{
-				ID:           job.ID,
-				Status:       ptr.String("error"),
-				ErrorMessage: ptr.String(err.Error()),
-				CompletedAt:  ptr.Time(time.Now()),
-			})
-			return
-		}
-
-		// Mark job as completed
+	// Upload file
+	if err := s.objectStore.Upload(ctx, key, progressReader); err != nil {
 		s.storage.UpdateJob(ctx, db.UpdateJobParams{
-			ID:          job.ID,
-			Status:      ptr.String("completed"),
-			CompletedAt: ptr.Time(time.Now()),
+			ID:           job.ID,
+			Status:       ptr.String("error"),
+			ErrorMessage: ptr.String(err.Error()),
+			CompletedAt:  ptr.Time(time.Now()),
 		})
+		return fmt.Errorf("upload file: %w", err)
 	}
 
-	s.jobs <- jobFn
+	// Create template version with computed hash
+	hashStr := hex.EncodeToString(hasher.Sum(nil))
+	fmt.Printf("Hash: %s\n", hashStr)
+	if _, err := s.storage.CreateTemplateVersion(ctx, db.CreateTemplateVersionParams{
+		ID:            uuid.New().String(),
+		TemplateID:    params.TemplateID.String(),
+		VersionNumber: params.Version,
+		ObjectKey:     key,
+		FileSize:      ptr.Int64(params.File.Size),
+		FileHash:      ptr.String(hashStr),
+	}); err != nil {
+		s.storage.UpdateJob(ctx, db.UpdateJobParams{
+			ID:           job.ID,
+			Status:       ptr.String("error"),
+			ErrorMessage: ptr.String(err.Error()),
+			CompletedAt:  ptr.Time(time.Now()),
+		})
+		return fmt.Errorf("create template version: %w", err)
+	}
+
+	// Mark job as completed
+	s.storage.UpdateJob(ctx, db.UpdateJobParams{
+		ID:          job.ID,
+		Status:      ptr.String("completed"),
+		CompletedAt: ptr.Time(time.Now()),
+	})
 
 	return nil
 }
